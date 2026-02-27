@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["python3", "python312Packages.pymupdf"]
+nixPkgs = ["nodejs_20", "npm-9_x", "python3", "python312Packages.pymupdf"]
 
 [phases.install]
 cmds = ["npm ci"]
