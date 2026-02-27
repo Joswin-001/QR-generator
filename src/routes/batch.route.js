@@ -4,6 +4,7 @@ const multer = require('multer');
 const { renderPages } = require('../imagesheet/pdf.renderer');
 const { extractText } = require('../imagesheet/ocr.engine');
 const { extractSkus } = require('../imagesheet/sku.extractor');
+const { extractProductImages } = require('../imagesheet/image.extractor');
 const { buildCollectionUrl } = require('../imagesheet/collection.url.builder');
 const { toBuffer: generateQRBuffer } = require('../core/qr.generator');
 const batchStore = require('../store/batch.store');
@@ -25,7 +26,7 @@ router.post('/api/qr/batch', upload.single('imagesheet'), async (req, res) => {
   }
 
   try {
-    // Step 1 — Render PDF to images
+    // Step 1 — Render PDF pages to images
     const pageBuffers = await renderPages(req.file.buffer, { dpi: 300 });
 
     // Step 2 — OCR each page
@@ -39,27 +40,24 @@ router.post('/api/qr/batch', upload.single('imagesheet'), async (req, res) => {
     // Step 3 — Extract SKUs
     const extraction = extractSkus(fullText);
     const skus = extraction.skus;
-
     if (skus.length === 0) {
-      return res.status(422).json({
-        error: 'No SKUs could be extracted from this PDF. Check OCR quality.',
-      });
+      return res.status(422).json({ error: 'No SKUs could be extracted from this PDF.' });
     }
 
-    // Step 4 — Extract episode batch ID (e.g. NPT7Z)
+    // Step 4 — Extract product images from PDF grid (page 1)
+    const images = await extractProductImages(pageBuffers[0], skus.length);
+
+    // Step 5 — Extract batch ID
     const batchId = extraction.episodeCode || `BATCH${Date.now()}`;
 
-    // Step 5 — Register batch in store
-    batchStore.save(batchId, skus);
+    // Step 6 — Register batch with images
+    batchStore.save(batchId, skus, images);
 
-    // Step 6 — Build proxy URL (this goes into the QR)
+    // Step 7 — Build proxy QR URL
     const proxyBaseUrl = process.env.PROXY_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
     const proxyRedirectUrl = `${proxyBaseUrl}/r/${batchId}`;
 
-    // Step 7 — Generate QR pointing to proxy
     const qrBuffer = await generateQRBuffer(proxyRedirectUrl);
-    const qrBase64 = qrBuffer.toString('base64');
-
     const collectionUrl = buildCollectionUrl(skus);
 
     return res.status(200).json({
@@ -67,7 +65,7 @@ router.post('/api/qr/batch', upload.single('imagesheet'), async (req, res) => {
       skus,
       proxyRedirectUrl,
       collectionUrl,
-      qrCode: `data:image/png;base64,${qrBase64}`,
+      qrCode: `data:image/png;base64,${qrBuffer.toString('base64')}`,
       pageCount: pageBuffers.length,
     });
 

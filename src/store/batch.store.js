@@ -1,7 +1,6 @@
 const fs = require('fs');
 const path = require('path');
 
-// On Railway, use /tmp for writable storage
 const PERSIST_PATH = process.env.NODE_ENV === 'production'
   ? '/tmp/batches.json'
   : path.join(__dirname, '../../data/batches.json');
@@ -38,9 +37,15 @@ function saveToDisk() {
   }
 }
 
-function save(batchId, skus) {
+/**
+ * @param {string}   batchId
+ * @param {string[]} skus
+ * @param {string[]} images  - base64 PNG strings, one per SKU (optional)
+ */
+function save(batchId, skus, images = []) {
   store.set(batchId, {
     skus,
+    images,
     createdAt: new Date().toISOString(),
   });
   saveToDisk();

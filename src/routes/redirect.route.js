@@ -2,70 +2,6 @@ const express = require('express');
 const router = express.Router();
 const batchStore = require('../store/batch.store');
 
-async function fetchProductsFromAlgolia(skus) {
-  const appId = process.env.ALGOLIA_APP_ID;
-  const apiKey = process.env.ALGOLIA_API_KEY;
-  const index = process.env.ALGOLIA_INDEX || 'uat_catalog_replica';
-
-  if (!appId || !apiKey) return {};
-
-  try {
-    // Search with objectID filter — works reliably unlike the objects endpoint
-    const filter = skus.map(sku => `objectID:${sku}`).join(' OR ');
-    const url = `https://${appId}-dsn.algolia.net/1/indexes/${index}/query`;
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'X-Algolia-Application-Id': appId,
-        'X-Algolia-API-Key': apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: '',
-        filters: filter,
-        hitsPerPage: 50,
-        attributesToRetrieve: [
-          'Catalog_TitleDescription',
-          'Media_Images',
-          'Pricing_ActivePrice',
-          'Catalog_StyleNumber',
-        ],
-      }),
-    });
-
-    if (!res.ok) {
-      console.error('[algolia] response not ok:', res.status, await res.text());
-      return {};
-    }
-
-    const data = await res.json();
-    const map = {};
-    (data.hits || []).forEach(product => {
-      if (product && product.objectID) {
-        map[product.objectID] = product;
-      }
-    });
-    return map;
-  } catch (e) {
-    console.error('[algolia] fetch error:', e.message);
-    return {};
-  }
-}
-
-function getImageUrl(product) {
-  try {
-    // Media_Images is a plain array of URL strings
-    const imgs = product.Media_Images;
-    if (Array.isArray(imgs) && imgs.length > 0) {
-      return imgs[0]; // first image URL
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 router.post('/api/redirect/register', (req, res) => {
   const { batchId, skus } = req.body;
   if (!batchId || !Array.isArray(skus) || skus.length === 0) {
@@ -73,7 +9,7 @@ router.post('/api/redirect/register', (req, res) => {
   }
   const cleanBatchId = batchId.trim().toUpperCase();
   const cleanSkus = skus.map(s => s.trim().toUpperCase()).filter(Boolean);
-  batchStore.save(cleanBatchId, cleanSkus);
+  batchStore.save(cleanBatchId, cleanSkus, []);
   const proxyBaseUrl = process.env.PROXY_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
   return res.status(201).json({
     batchId: cleanBatchId,
@@ -82,7 +18,7 @@ router.post('/api/redirect/register', (req, res) => {
   });
 });
 
-router.get('/r/:batchId', async (req, res) => {
+router.get('/r/:batchId', (req, res) => {
   const batchId = req.params.batchId.trim().toUpperCase();
   const entry = batchStore.get(batchId);
 
@@ -90,42 +26,18 @@ router.get('/r/:batchId', async (req, res) => {
     return res.redirect(302, 'https://www.jtv.com');
   }
 
-  // Fetch all products server-side — no CORS issues
-  const products = await fetchProductsFromAlgolia(entry.skus);
-
-  // Build product cards HTML
-  const cardsHtml = entry.skus.map(sku => {
-    const product = products[sku];
+  const cardsHtml = entry.skus.map((sku, i) => {
+    const imageBase64 = entry.images && entry.images[i];
     const productUrl = `https://www.jtv.com/product/${sku}`;
-
-    if (!product) {
-      return `
-        <a class="card card-notfound" href="${productUrl}" target="_blank">
-          <div class="card-img-placeholder">No image</div>
-          <div class="card-body">
-            <span class="card-sku">${sku}</span>
-            <span class="card-title">View on JTV</span>
-          </div>
-          <span class="card-btn">Shop Now &rarr;</span>
-        </a>`;
-    }
-
-    const imgUrl = getImageUrl(product);
-    const title = product.Catalog_TitleDescription || sku;
-    const price = product.Pricing_ActivePrice
-      ? `$${parseFloat(product.Pricing_ActivePrice).toFixed(2)}`
-      : '';
 
     return `
       <a class="card" href="${productUrl}" target="_blank">
-        ${imgUrl
-          ? `<img class="card-img" src="${imgUrl}" alt="${title}" loading="lazy"/>`
+        ${imageBase64
+          ? `<img class="card-img" src="data:image/png;base64,${imageBase64}" alt="${sku}"/>`
           : `<div class="card-img-placeholder">No image</div>`
         }
         <div class="card-body">
           <span class="card-sku">${sku}</span>
-          <span class="card-title">${title}</span>
-          ${price ? `<span class="card-price">${price}</span>` : ''}
         </div>
         <span class="card-btn">Shop Now &rarr;</span>
       </a>`;
@@ -200,7 +112,7 @@ router.get('/r/:batchId', async (req, res) => {
       aspect-ratio: 1;
       object-fit: contain;
       background: #fff;
-      padding: 12px;
+      padding: 8px;
     }
     .card-img-placeholder {
       width: 100%;
@@ -215,13 +127,13 @@ router.get('/r/:batchId', async (req, res) => {
     .card-body {
       padding: 12px;
       flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
     }
-    .card-sku { font-family: monospace; font-size: 11px; color: #e63946; font-weight: 600; }
-    .card-title { font-size: 13px; color: #ccc; line-height: 1.4; flex: 1; }
-    .card-price { font-size: 15px; font-weight: 700; color: #fff; }
+    .card-sku {
+      font-family: monospace;
+      font-size: 12px;
+      color: #e63946;
+      font-weight: 700;
+    }
     .card-btn {
       margin: 0 12px 12px;
       background: #e63946;
@@ -233,7 +145,6 @@ router.get('/r/:batchId', async (req, res) => {
       text-align: center;
       display: block;
     }
-    .card-notfound { opacity: 0.5; }
     footer { text-align: center; padding: 32px 16px; color: #444; font-size: 12px; }
   </style>
 </head>
