@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["python3", "python312Packages.pymupdf"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["echo 'Build complete'"]
