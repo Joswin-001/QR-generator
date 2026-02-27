@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["nodejs_20", "python3", "python311Packages.pymupdf"]
+nixPkgs = ["nodejs_20", "graphicsmagick", "ghostscript"]
 
 [phases.install]
 cmds = ["npm ci"]
