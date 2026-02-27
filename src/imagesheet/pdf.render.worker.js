@@ -50,15 +50,17 @@ async function main() {
     const workerPath = path.join(path.dirname(require.resolve('pdfjs-dist/package.json')), 'legacy', 'build', 'pdf.worker.mjs');
     pdfjsLib.GlobalWorkerOptions.workerSrc = url.pathToFileURL(workerPath).href;
 
+    const canvasFactory = new NodeCanvasFactory();
+
     const loadingTask = pdfjsLib.getDocument({
         data: new Uint8Array(pdfBuffer),
         disableFontFace: true,
         useSystemFonts: true,
+        canvasFactory, // CRITICAL: pass our factory here so pdfjs never uses its internal one
     });
 
     const pdfDocument = await loadingTask.promise;
     const numPages = pdfDocument.numPages;
-    const canvasFactory = new NodeCanvasFactory();
     const results = [];
 
     for (let pageNum = 1; pageNum <= numPages; pageNum++) {
