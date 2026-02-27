@@ -1,8 +1,8 @@
 [phases.setup]
-nixPkgs = ["nodejs_20", "npm-9_x", "python3", "python312Packages.pymupdf"]
+nixPkgs = ["nodejs_20", "python3"]
 
 [phases.install]
-cmds = ["npm ci"]
-
-[phases.build]
-cmds = ["echo 'Build complete'"]
+cmds = [
+  "npm ci",
+  "pip3 install pymupdf --break-system-packages"
+]
