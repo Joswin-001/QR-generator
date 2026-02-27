@@ -10,8 +10,10 @@ async function fetchProductsFromAlgolia(skus) {
   if (!appId || !apiKey) return {};
 
   try {
-    // Use Algolia's objects endpoint — fetch multiple by objectID in one call
-    const url = `https://${appId}-dsn.algolia.net/1/indexes/${index}/objects`;
+    // Search with objectID filter — works reliably unlike the objects endpoint
+    const filter = skus.map(sku => `objectID:${sku}`).join(' OR ');
+    const url = `https://${appId}-dsn.algolia.net/1/indexes/${index}/query`;
+
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -20,16 +22,26 @@ async function fetchProductsFromAlgolia(skus) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        requests: skus.map(sku => ({ indexName: index, objectID: sku })),
+        query: '',
+        filters: filter,
+        hitsPerPage: 50,
+        attributesToRetrieve: [
+          'Catalog_TitleDescription',
+          'Media_Images',
+          'Pricing_ActivePrice',
+          'Catalog_StyleNumber',
+        ],
       }),
     });
 
-    if (!res.ok) return {};
-    const data = await res.json();
+    if (!res.ok) {
+      console.error('[algolia] response not ok:', res.status, await res.text());
+      return {};
+    }
 
-    // Build a map of SKU → product data
+    const data = await res.json();
     const map = {};
-    (data.results || []).forEach(product => {
+    (data.hits || []).forEach(product => {
       if (product && product.objectID) {
         map[product.objectID] = product;
       }
@@ -43,12 +55,12 @@ async function fetchProductsFromAlgolia(skus) {
 
 function getImageUrl(product) {
   try {
+    // Media_Images is a plain array of URL strings
     const imgs = product.Media_Images;
-    if (!imgs) return null;
-    const keys = Object.keys(imgs);
-    if (!keys.length) return null;
-    const first = imgs[keys[0]];
-    return first.url || first.Url || first.src || null;
+    if (Array.isArray(imgs) && imgs.length > 0) {
+      return imgs[0]; // first image URL
+    }
+    return null;
   } catch {
     return null;
   }
