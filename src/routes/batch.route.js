@@ -1,63 +1,80 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const { renderPages } = require('../imagesheet/pdf.renderer');
-const { extractText } = require('../imagesheet/ocr.engine');
-const { extractSkus } = require('../imagesheet/sku.extractor');
-const { extractProductImages } = require('../imagesheet/image.extractor');
+const { scrapeProductImages } = require('../imagesheet/image.scraper');
 const { buildCollectionUrl } = require('../imagesheet/collection.url.builder');
 const { toBuffer: generateQRBuffer } = require('../core/qr.generator');
 const batchStore = require('../store/batch.store');
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype !== 'application/pdf') {
-      return cb(new Error('Only PDF files are accepted'));
+    if (file.mimetype !== 'application/json' && !file.originalname.endsWith('.json')) {
+      return cb(new Error('Only JSON files are accepted'));
     }
     cb(null, true);
   },
 });
 
+const EXCLUDED_ITEMS = new Set(['SCTE35', 'THUMB']);
+
 router.post('/api/qr/batch', upload.single('imagesheet'), async (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ error: 'No PDF file uploaded' });
+    return res.status(400).json({ error: 'No JSON file uploaded' });
   }
 
   try {
-    // Step 1 — Render PDF pages to images
-    const pageBuffers = await renderPages(req.file.buffer, { dpi: 300 });
-
-    // Step 2 — OCR each page
-    const allText = [];
-    for (const pageBuffer of pageBuffers) {
-      const text = await extractText(pageBuffer);
-      allText.push(text);
+    // Step 1 — Parse JSON
+    let parsed;
+    try {
+      parsed = JSON.parse(req.file.buffer.toString('utf-8'));
+    } catch (e) {
+      return res.status(422).json({ error: 'Invalid JSON file — could not parse.' });
     }
-    const fullText = allText.join('\n');
 
-    // Step 3 — Extract SKUs
-    const extraction = extractSkus(fullText);
-    const skus = extraction.skus;
+    const presentations = parsed?.Presentations;
+    if (!Array.isArray(presentations) || presentations.length === 0) {
+      return res.status(422).json({ error: 'No Presentations array found in JSON.' });
+    }
+
+    // Step 2 — Filter out SCTE35, THUMB and deduplicate
+    const seen = new Set();
+    const skus = [];
+    for (const entry of presentations) {
+      const item = entry?.Item?.trim();
+      if (!item || EXCLUDED_ITEMS.has(item)) continue;
+      if (!seen.has(item)) {
+        seen.add(item);
+        skus.push(item);
+      }
+    }
+
     if (skus.length === 0) {
-      return res.status(422).json({ error: 'No SKUs could be extracted from this PDF.' });
+      return res.status(422).json({ error: 'No valid SKUs found in this JSON after filtering.' });
     }
 
-    // Step 4 — Extract product images from PDF grid (page 1)
-    const images = await extractProductImages(pageBuffers[0], skus.length);
+    // Step 3 — Derive batch ID from Filename
+    const rawFilename = parsed?.Filename || req.file.originalname || '';
+    const batchId = rawFilename
+      .replace(/\.mp4\.json$/i, '')
+      .replace(/\.mp4$/i, '')
+      .replace(/\.json$/i, '')
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      || `BATCH${Date.now()}`;
 
-    // Step 5 — Extract batch ID
-    const batchId = extraction.episodeCode || `BATCH${Date.now()}`;
+    // Step 4 — Fetch images from JTV CDN
+    console.log(`[batch.route] Fetching images for ${skus.length} SKUs...`);
+    const images = await scrapeProductImages(skus, 5);
 
-    // Step 6 — Register batch with images
+    // Step 5 — Save to store
     batchStore.save(batchId, skus, images);
 
-    // Step 7 — Build proxy QR URL
+    // Step 6 — Generate QR pointing to Railway proxy
     const proxyBaseUrl = process.env.PROXY_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
     const proxyRedirectUrl = `${proxyBaseUrl}/r/${batchId}`;
-
     const qrBuffer = await generateQRBuffer(proxyRedirectUrl);
+
     const collectionUrl = buildCollectionUrl(skus);
 
     return res.status(200).json({
@@ -66,7 +83,7 @@ router.post('/api/qr/batch', upload.single('imagesheet'), async (req, res) => {
       proxyRedirectUrl,
       collectionUrl,
       qrCode: `data:image/png;base64,${qrBuffer.toString('base64')}`,
-      pageCount: pageBuffers.length,
+      sourceFile: rawFilename,
     });
 
   } catch (err) {
