@@ -9,7 +9,6 @@
  */
 
 const axios = require('axios');
-const pLimit = require('p-limit');
 
 const CDN_BASE = 'https://images.jtv.com/jewelry/JTV-{sku}-1-medium.jpg';
 
@@ -50,11 +49,19 @@ async function scrapeProductImage(sku) {
 }
 
 async function scrapeProductImages(skus, concurrency = 5) {
-    const limit = pLimit(concurrency);
+    const results = [];
 
-    const results = await Promise.all(
-        skus.map(sku => limit(() => scrapeProductImage(sku)))
-    );
+    // Process SKUs in chunks defined by concurrency
+    for (let i = 0; i < skus.length; i += concurrency) {
+        const chunk = skus.slice(i, i + concurrency);
+
+        // Fetch the current chunk concurrently
+        const chunkResults = await Promise.all(
+            chunk.map(sku => scrapeProductImage(sku))
+        );
+
+        results.push(...chunkResults);
+    }
 
     const successCount = results.filter(Boolean).length;
     console.log(`[image.scraper] Done: ${successCount}/${skus.length} images fetched`);
