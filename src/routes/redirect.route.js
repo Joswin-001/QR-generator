@@ -23,7 +23,17 @@ router.get('/r/:batchId', (req, res) => {
   const entry = batchStore.get(batchId);
 
   if (!entry) {
-    return res.redirect(302, 'https://www.jtv.com');
+    return res.status(404).send(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>Batch Not Found</title><meta name="viewport" content="width=device-width, initial-scale=1.0"/></head>
+      <body style="background:#0f0f13;color:#fff;font-family:sans-serif;text-align:center;padding:50px;">
+        <h2>Batch Not Found</h2>
+        <p style="color:#aaa;margin-top:10px;">This QR code points to a batch that doesn't exist on this server.</p>
+        <p style="color:#666;font-size:12px;margin-top:20px;">(If you generated this locally, it's saved on your local machine, not on Railway)</p>
+      </body>
+      </html>
+    `);
   }
 
   const cardsHtml = entry.skus.map((sku, i) => {
@@ -33,9 +43,9 @@ router.get('/r/:batchId', (req, res) => {
     return `
       <a class="card" href="${productUrl}" target="_blank">
         ${imageBase64
-          ? `<img class="card-img" src="data:image/png;base64,${imageBase64}" alt="${sku}"/>`
-          : `<div class="card-img-placeholder">No image</div>`
-        }
+        ? `<img class="card-img" src="data:image/png;base64,${imageBase64}" alt="${sku}"/>`
+        : `<div class="card-img-placeholder">No image</div>`
+      }
         <div class="card-body">
           <span class="card-sku">${sku}</span>
         </div>

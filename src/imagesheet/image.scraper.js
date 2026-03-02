@@ -1,13 +1,3 @@
-/**
- * image.scraper.js
- *
- * Fetches product images directly from the JTV CDN using the known URL pattern:
- *   https://images.jtv.com/jewelry/JTV-{SKU}-1-medium.jpg
- *
- * No HTML scraping needed — direct CDN hit per SKU.
- * Converts each image to base64 for the WAF bypass collection page.
- */
-
 const axios = require('axios');
 
 const CDN_BASE = 'https://images.jtv.com/jewelry/JTV-{sku}-1-medium.jpg';
@@ -16,6 +6,21 @@ const HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     'Referer': 'https://www.jtv.com/',
 };
+
+function createLimit(concurrency) {
+    let active = 0;
+    const queue = [];
+    const next = () => {
+        if (active >= concurrency || queue.length === 0) return;
+        active++;
+        const { fn, resolve, reject } = queue.shift();
+        fn().then(resolve).catch(reject).finally(() => { active--; next(); });
+    };
+    return (fn) => new Promise((resolve, reject) => {
+        queue.push({ fn, resolve, reject });
+        next();
+    });
+}
 
 async function scrapeProductImage(sku) {
     const imageUrl = CDN_BASE.replace('{sku}', sku.toUpperCase());
@@ -49,19 +54,11 @@ async function scrapeProductImage(sku) {
 }
 
 async function scrapeProductImages(skus, concurrency = 5) {
-    const results = [];
+    const limit = createLimit(concurrency);
 
-    // Process SKUs in chunks defined by concurrency
-    for (let i = 0; i < skus.length; i += concurrency) {
-        const chunk = skus.slice(i, i + concurrency);
-
-        // Fetch the current chunk concurrently
-        const chunkResults = await Promise.all(
-            chunk.map(sku => scrapeProductImage(sku))
-        );
-
-        results.push(...chunkResults);
-    }
+    const results = await Promise.all(
+        skus.map(sku => limit(() => scrapeProductImage(sku)))
+    );
 
     const successCount = results.filter(Boolean).length;
     console.log(`[image.scraper] Done: ${successCount}/${skus.length} images fetched`);
