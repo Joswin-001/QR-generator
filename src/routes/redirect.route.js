@@ -40,10 +40,14 @@ router.get('/r/:batchId', (req, res) => {
     const imageBase64 = entry.images && entry.images[i];
     const productUrl = `https://www.jtv.com/product/${sku}`;
 
+    const imgSrc = imageBase64
+      ? (imageBase64.startsWith('data:') ? imageBase64 : `data:image/png;base64,${imageBase64}`)
+      : null;
+
     return `
       <a class="card" href="${productUrl}" target="_blank">
-        ${imageBase64
-        ? `<img class="card-img" src="data:image/png;base64,${imageBase64}" alt="${sku}"/>`
+        ${imgSrc
+        ? `<img class="card-img" src="${imgSrc}" alt="${sku}"/>`
         : `<div class="card-img-placeholder">No image</div>`
       }
         <div class="card-body">
