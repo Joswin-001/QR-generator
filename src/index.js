@@ -44,17 +44,6 @@ app.use(proxyRoute);
 app.use(captionsRoute);
 app.use(dialogRoute);
 
-// ── Railway Sync Endpoint ──────────────────────────────────────
-app.post('/api/batch/sync', express.json({ limit: '500mb' }), (req, res) => {
-  const { batchId, skus, images, createdAt } = req.body;
-  if (!batchId || !skus) {
-    return res.status(400).json({ error: 'batchId and skus required' });
-  }
-  batchStore.save(batchId, skus, images || []);
-  console.log(`[sync] Received batch ${batchId} with ${skus.length} SKUs`);
-  res.json({ ok: true, batchId });
-});
-
 // ── Open folder ────────────────────────────────────────────────
 const { exec } = require('child_process');
 app.post('/api/open-folder', express.json(), (req, res) => {

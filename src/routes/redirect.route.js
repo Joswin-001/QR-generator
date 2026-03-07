@@ -193,4 +193,28 @@ router.get('/api/redirect/batches', (req, res) => {
   return res.json(batchStore.list());
 });
 
+// ── Sync endpoint — receives batch data from local PKG app ────
+router.post('/api/batch/sync', express.json({ limit: '500mb' }), (req, res) => {
+  try {
+    const { batchId, skus, images, createdAt } = req.body;
+
+    if (!batchId || !Array.isArray(skus) || skus.length === 0) {
+      return res.status(400).json({ error: 'batchId and skus required' });
+    }
+
+    // Normalize to uppercase to match the /r/:batchId lookup
+    const cleanBatchId = batchId.trim().toUpperCase();
+    const cleanSkus = skus.map(s => s.trim().toUpperCase()).filter(Boolean);
+
+    batchStore.save(cleanBatchId, cleanSkus, images || []);
+
+    console.log(`[sync] ✓ Received batch ${cleanBatchId} — ${cleanSkus.length} SKUs`);
+    res.json({ ok: true, batchId: cleanBatchId });
+
+  } catch (err) {
+    console.error('[sync] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

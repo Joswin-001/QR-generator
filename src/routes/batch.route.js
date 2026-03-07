@@ -78,14 +78,15 @@ router.post('/api/qr/batch', upload.single('imagesheet'), async (req, res) => {
       return res.status(422).json({ error: 'No valid SKUs found after filtering.' });
     }
 
-    // Step 3 — Derive batch ID from filename
+    // Step 3 — Derive batch ID and normalize to UPPERCASE
     const rawFilename = parsed?.Filename || req.file.originalname || '';
-    const batchId = rawFilename
+    const batchId = (rawFilename
       .replace(/\.mp4\.json$/i, '')
       .replace(/\.mp4$/i, '')
       .replace(/\.json$/i, '')
       .replace(/[^a-zA-Z0-9_-]/g, '_')
-      || `BATCH${Date.now()}`;
+      || `BATCH${Date.now()}`
+    ).toUpperCase();
 
     // Step 4 — Fetch images from JTV CDN
     console.log(`[batch.route] Fetching images for ${skus.length} SKUs...`);
