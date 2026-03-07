@@ -1,4 +1,4 @@
-const axios = require('axios');
+const axios = require('axios/dist/node/axios.cjs');
 
 const CDN_BASE = 'https://images.jtv.com/jewelry/JTV-{sku}-1-medium.jpg';
 

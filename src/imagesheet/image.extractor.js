@@ -1,4 +1,4 @@
-const sharp = require('sharp');
+const sharp = require('../sharp.helper')();
 
 /**
  * Moogle imagesheets follow a strict 4-column grid.
@@ -18,8 +18,8 @@ const sharp = require('sharp');
  */
 
 const COLS = [
-  { left: 150,  width: 554 },
-  { left: 725,  width: 554 },
+  { left: 150, width: 554 },
+  { left: 725, width: 554 },
   { left: 1300, width: 554 },
   { left: 1875, width: 554 },
 ];
@@ -41,9 +41,9 @@ function buildRegions(count) {
     const col = i % COLS_PER_ROW;
     const row = Math.floor(i / COLS_PER_ROW);
     regions.push({
-      left:   COLS[col].left,
-      top:    ROW_START + row * ROW_HEIGHT,
-      width:  COLS[col].width,
+      left: COLS[col].left,
+      top: ROW_START + row * ROW_HEIGHT,
+      width: COLS[col].width,
       height: ROW_HEIGHT,
     });
   }
@@ -62,15 +62,15 @@ async function extractProductImages(pageBuffer, count) {
 
   // Get actual page dimensions to validate crops don't go out of bounds
   const metadata = await sharp(pageBuffer).metadata();
-  const pageWidth  = metadata.width  || 2550;
+  const pageWidth = metadata.width || 2550;
   const pageHeight = metadata.height || 3300;
 
   const images = await Promise.all(
     regions.map(async (region, i) => {
       // Clamp region to page bounds
-      const left   = Math.max(0, region.left);
-      const top    = Math.max(0, region.top);
-      const width  = Math.min(region.width,  pageWidth  - left);
+      const left = Math.max(0, region.left);
+      const top = Math.max(0, region.top);
+      const width = Math.min(region.width, pageWidth - left);
       const height = Math.min(region.height, pageHeight - top);
 
       if (width <= 0 || height <= 0) {

@@ -1,5 +1,5 @@
 const Tesseract = require('tesseract.js');
-const sharp = require('sharp');
+const sharp = require('../sharp.helper')();
 
 /**
  * Preprocesses an image buffer to maximize OCR accuracy on bold grid text.
@@ -32,9 +32,9 @@ async function extractText(imageBuffer) {
         await worker.setParameters({
             tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
         });
-        
+
         const { data: { text } } = await worker.recognize(optimizedBuffer);
-        
+
         await worker.terminate();
         return text;
     } catch (error) {

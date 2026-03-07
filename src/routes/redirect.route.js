@@ -178,7 +178,7 @@ router.get('/r/:batchId', (req, res) => {
   <p class="section-title">${entry.skus.length} products found</p>
   <div id="grid">${cardsHtml}</div>
 </div>
-<footer>jewelrytelevision.com &nbsp;&middot;&nbsp; Powered by JTV Code Forge</footer>
+<footer>jewelrytelevision.com &nbsp;&middot;&nbsp; Powered by Fast TV Video Production Tool</footer>
 </body>
 </html>`;
 

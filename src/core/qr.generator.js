@@ -1,5 +1,5 @@
 const QRCode = require('qrcode');
-const sharp = require('sharp');
+const sharp = require('../sharp.helper')();
 
 /**
  * Generates a QR code as a PNG buffer.
@@ -86,10 +86,10 @@ async function toLabel(url, sku, imgBuffer) {
     try {
         const LABEL_WIDTH = 800;
         const LABEL_HEIGHT = 1350; // Increased to give the QR code room to breathe
-        
+
         // 1. Generate the base QR Code (Slightly smaller)
         const qrBuffer = await toBuffer(url, { margin: 1, width: 480 });
-        
+
         // 2. Build the SVG background template
         const svgTemplate = `
         <svg width="${LABEL_WIDTH}" height="${LABEL_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
@@ -120,7 +120,7 @@ async function toLabel(url, sku, imgBuffer) {
             // The generated QR Code (Centered)
             {
                 input: qrBuffer,
-                top: 660, 
+                top: 660,
                 left: 160 // (800 - 480) / 2
             }
         ];
@@ -128,12 +128,12 @@ async function toLabel(url, sku, imgBuffer) {
         // 4. If we retrieved a product image, overlay it
         if (imgBuffer) {
             const productImg = await sharp(imgBuffer)
-                .resize(600, 420, { 
+                .resize(600, 420, {
                     fit: 'contain',
-                    background: { r: 255, g: 255, b: 255, alpha: 1 } 
+                    background: { r: 255, g: 255, b: 255, alpha: 1 }
                 })
                 .toBuffer();
-                
+
             composites.push({
                 input: productImg,
                 top: 200, // Below the header
@@ -146,7 +146,7 @@ async function toLabel(url, sku, imgBuffer) {
             .composite(composites)
             .png()
             .toBuffer();
-            
+
     } catch (error) {
         throw new Error(`Failed to generate custom label: ${error.message}`);
     }

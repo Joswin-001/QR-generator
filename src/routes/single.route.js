@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { toBuffer, toLabel } = require('../core/qr.generator');
-const { resolveUrl } = require('../core/sku.resolver');
-const { fetchImage } = require('../io/image.fetcher');
+const { resolve } = require('../core/sku.resolver');
+const { fetchProductImage } = require('../io/image.fetcher');
 
 router.post('/api/qr/single', async (req, res) => {
   const { sku, format } = req.body;
@@ -12,12 +12,12 @@ router.post('/api/qr/single', async (req, res) => {
   }
 
   try {
-    const url = resolveUrl(sku.trim());
+    const { url } = resolve(sku.trim());
 
     // Attempt to fetch product image for the label
     let imgBuffer = null;
     try {
-      imgBuffer = await fetchImage(sku.trim());
+      imgBuffer = await fetchProductImage(sku.trim());
     } catch (imgErr) {
       console.warn(`[single.route] Could not fetch image for ${sku}:`, imgErr.message);
     }
